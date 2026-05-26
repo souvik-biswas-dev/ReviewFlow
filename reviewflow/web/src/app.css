@@ -1,0 +1,110 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+	:root {
+		color-scheme: dark;
+	}
+
+	html,
+	body {
+		height: 100%;
+	}
+
+	body {
+		background:
+			radial-gradient(900px 600px at 12% -10%, rgba(124, 92, 255, 0.18), transparent 60%),
+			radial-gradient(800px 500px at 100% 0%, rgba(34, 211, 238, 0.14), transparent 55%),
+			#06060c;
+	}
+
+	::selection {
+		background: rgba(124, 92, 255, 0.35);
+	}
+
+	/* Slim, themed scrollbars to match the dark aesthetic. */
+	* {
+		scrollbar-width: thin;
+		scrollbar-color: rgba(124, 92, 255, 0.4) transparent;
+	}
+	*::-webkit-scrollbar {
+		width: 9px;
+		height: 9px;
+	}
+	*::-webkit-scrollbar-thumb {
+		background: rgba(124, 92, 255, 0.35);
+		border-radius: 999px;
+	}
+}
+
+@layer components {
+	/* Glassmorphic surface — the signature container of the whole app. */
+	.glass {
+		@apply border border-white/10 bg-white/[0.03] backdrop-blur-xl;
+		box-shadow:
+			inset 0 1px 0 0 rgba(255, 255, 255, 0.06),
+			0 24px 60px -28px rgba(0, 0, 0, 0.8);
+	}
+
+	.glass-hover {
+		@apply transition duration-300 hover:border-aurora-violet/40 hover:bg-white/[0.05];
+	}
+
+	/* Gradient text used for headlines + emphasis. */
+	.text-aurora {
+		@apply bg-aurora-grad bg-clip-text text-transparent;
+	}
+
+	/* Primary gradient button. */
+	.btn-aurora {
+		@apply relative inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 font-medium text-ink-900 transition active:scale-[0.98];
+		background-image: linear-gradient(120deg, #7c5cff, #39a0ff 55%, #22d3ee);
+		box-shadow: 0 8px 30px -8px rgba(124, 92, 255, 0.7);
+	}
+	.btn-aurora:hover {
+		filter: brightness(1.08);
+	}
+	.btn-aurora:disabled {
+		@apply cursor-not-allowed opacity-50;
+		filter: none;
+	}
+
+	/* Ghost button. */
+	.btn-ghost {
+		@apply inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 font-medium text-slate-200 transition hover:border-white/20 hover:bg-white/[0.06] active:scale-[0.98];
+	}
+
+	/* Skeleton shimmer block. */
+	.skeleton {
+		@apply relative overflow-hidden rounded-lg bg-white/[0.05];
+	}
+	.skeleton::after {
+		content: '';
+		@apply absolute inset-0 -translate-x-full;
+		background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+		animation: shimmer 1.5s infinite;
+	}
+}
+
+/* CodeMirror lives inside glass panels — let our theme show through. */
+.cm-editor {
+	background: transparent !important;
+	height: 100%;
+	font-size: 13px;
+}
+.cm-editor .cm-gutters {
+	background: transparent !important;
+	border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
+	color: rgba(148, 163, 184, 0.6);
+}
+.cm-editor .cm-lineNumbers .cm-gutterElement {
+	cursor: pointer;
+	transition: color 0.15s;
+}
+.cm-editor .cm-lineNumbers .cm-gutterElement:hover {
+	color: #22d3ee;
+}
+.cm-editor.cm-focused {
+	outline: none !important;
+}
