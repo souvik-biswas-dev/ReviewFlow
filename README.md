@@ -7,6 +7,8 @@ the link, and watch reviews stream in live while Google Gemini analyses the
 code in the background. It pairs a Go (Gin) backend with a Svelte 5 frontend
 over GraphQL and a hand-rolled WebSocket hub.
 
+Built by [Souvik Biswas](https://souvikbiswas-portfolio.pages.dev)
+
 ---
 
 ## Architecture
