@@ -1,0 +1,26 @@
+# Keep the backend build context lean.
+
+# Frontend lives in its own image
+web/
+
+# Local dev artefacts
+tmp/
+.air.toml
+
+# Secrets — never bake into the image
+.env
+.env.*
+!.env.example
+
+# Editor / VCS noise
+.git
+.github
+.gitignore
+*.md
+.vscode/
+.idea/
+
+# Anything node-ish that might wander in
+node_modules
+.svelte-kit
+build

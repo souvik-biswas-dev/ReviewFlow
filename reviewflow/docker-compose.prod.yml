@@ -1,0 +1,92 @@
+# docker-compose.prod.yml — ReviewFlow production stack.
+#
+# Bring it up with:
+#   cp .env.prod.example .env.prod   # then fill in real values
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+#
+# Three services:
+#   - mongo    : persistent database, auth enabled, no exposed port.
+#   - backend  : distroless Go binary, no exposed port (Caddy reaches it
+#                internally on the compose network).
+#   - caddy    : SPA host + reverse proxy + automatic HTTPS via Let's Encrypt.
+#
+# All secrets come from .env.prod; nothing is hardcoded.
+
+name: reviewflow
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test:
+        - "CMD"
+        - "mongosh"
+        - "--quiet"
+        - "-u"
+        - "${MONGO_ROOT_USERNAME}"
+        - "-p"
+        - "${MONGO_ROOT_PASSWORD}"
+        - "--authenticationDatabase"
+        - "admin"
+        - "--eval"
+        - "db.adminCommand('ping')"
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks: [reviewflow]
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    # All backend config (incl. MONGO_URI with credentials, JWT_SECRET,
+    # GitHub OAuth, Gemini key, CORS_ORIGIN, FRONTEND_URL) is in .env.prod.
+    env_file:
+      - .env.prod
+    depends_on:
+      mongo:
+        condition: service_healthy
+    # Internal only; Caddy proxies to it on the compose network.
+    expose:
+      - "8080"
+    networks: [reviewflow]
+
+  caddy:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    environment:
+      # Used by the Caddyfile to template the site block + ACME email +
+      # upstream address.
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+      BACKEND_UPSTREAM: backend:8080
+    volumes:
+      # Persisted so issued certificates survive container rebuilds.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+    networks: [reviewflow]
+
+volumes:
+  mongo_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  reviewflow:
+    driver: bridge

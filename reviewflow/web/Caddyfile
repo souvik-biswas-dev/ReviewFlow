@@ -1,0 +1,46 @@
+# Caddyfile — ReviewFlow edge server.
+#
+# Caddy auto-provisions a Let's Encrypt certificate for {$DOMAIN} the moment
+# it boots (assuming DNS points here + ports 80/443 are reachable). It also
+# transparently handles WebSocket upgrades via reverse_proxy.
+
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	# ------------------------------------------------------------------
+	# Backend routes: GraphQL, OAuth, WebSocket, notifications, health.
+	# ------------------------------------------------------------------
+	@backend path /graphql /graphql/* /auth /auth/* /ws/* /notifications /notifications/* /health
+	handle @backend {
+		reverse_proxy {$BACKEND_UPSTREAM}
+	}
+
+	# ------------------------------------------------------------------
+	# SvelteKit SPA: static assets with index.html fallback for client-side
+	# routing (every page is client-rendered via ssr=false).
+	# ------------------------------------------------------------------
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+
+	# ------------------------------------------------------------------
+	# Security headers. CSP is tight — the only cross-origin assets are
+	# Google Fonts and GitHub avatars. connect-src 'self' covers GraphQL +
+	# WebSocket because everything is same-origin behind Caddy.
+	# ------------------------------------------------------------------
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Frame-Options "DENY"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), camera=(), microphone=()"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://avatars.githubusercontent.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		-Server
+	}
+}
