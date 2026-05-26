@@ -68,7 +68,11 @@ func (c *Client) readPump() {
 		_, raw, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err,
-				websocket.CloseGoingAway, websocket.CloseAbnormalClosure, websocket.CloseNormalClosure) {
+				websocket.CloseNormalClosure,    // 1000 – clean client disconnect
+				websocket.CloseGoingAway,        // 1001 – browser navigating away
+				websocket.CloseNoStatusReceived, // 1005 – Render proxy spin-down (no status frame)
+				websocket.CloseAbnormalClosure,  // 1006 – network drop
+			) {
 				log.Printf("ws: read error (user=%s snippet=%s): %v", c.userId, c.snippetId, err)
 			}
 			return
