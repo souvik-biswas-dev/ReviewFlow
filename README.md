@@ -51,6 +51,181 @@ over GraphQL and a hand-rolled WebSocket hub.
 
 ---
 
+## Low-level design
+
+### Class diagram
+
+```mermaid
+classDiagram
+    direction TB
+
+    class User {
+        +ObjectID id
+        +int64 githubId
+        +string githubUsername
+        +string avatarUrl
+        +Time createdAt
+        +Time updatedAt
+    }
+
+    class Snippet {
+        +ObjectID id
+        +ObjectID authorId
+        +string title
+        +string language
+        +string code
+        +string previousVersion
+        +Time createdAt
+        +Time updatedAt
+    }
+
+    class Review {
+        +ObjectID id
+        +ObjectID snippetId
+        +ObjectID authorId
+        +string body
+        +int lineNumber
+        +ObjectID parentReviewId
+        +Time createdAt
+    }
+
+    class AIReview {
+        +ObjectID id
+        +string snippetId
+        +string[] suggestions
+        +string complexity
+        +string[] refactorHints
+        +string[] securityFlags
+        +int qualityScore
+        +string language
+        +Time generatedAt
+    }
+
+    class Notification {
+        +ObjectID id
+        +ObjectID userId
+        +ObjectID snippetId
+        +ObjectID reviewId
+        +bool read
+        +Time createdAt
+    }
+
+    class Hub {
+        -map~string,Client~ rooms
+        -chan register
+        -chan unregister
+        -chan broadcast
+        -RWMutex mu
+        +Run()
+        +BroadcastToRoom(id, msg)
+        +RoomPresence(id) Presence[]
+    }
+
+    class Client {
+        -Conn conn
+        -string snippetId
+        -string userId
+        -string username
+        -chan send
+        -chan done
+        +readPump()
+        +writePump()
+    }
+
+    class AIService {
+        -GenerativeModel model
+        -Limiter limiter
+        -Client db
+        -Hub hub
+        +ReviewCode(id, lang, code)
+        -generateWithRetry(prompt)
+        -save(review)
+        -broadcast(review)
+    }
+
+    class AuthHandler {
+        -Config cfg
+        -Client db
+        -HttpClient http
+        +GitHubLogin(c)
+        +GitHubCallback(c)
+        +Me(c)
+    }
+
+    User "1" --> "*" Snippet : authors
+    User "1" --> "*" Review : writes
+    User "1" --> "*" Notification : receives
+    Snippet "1" --> "*" Review : has
+    Snippet "1" --> "0..1" AIReview : generated for
+    Review "0..1" --> "0..1" Review : replies to
+    Hub "1" o-- "*" Client : manages
+    AIService ..> Hub : broadcasts via
+    AIService ..> AIReview : produces
+    AuthHandler ..> User : upserts
+```
+
+### Sequence diagrams
+
+#### GitHub OAuth login
+
+```mermaid
+sequenceDiagram
+    actor Browser
+    participant FE as SvelteKit (CF Pages)
+    participant BE as Go API (Render)
+    participant GH as GitHub
+
+    Browser->>FE: click "Sign in with GitHub"
+    FE->>BE: GET /auth/github
+    BE-->>Browser: Set-Cookie rf_oauth_state + 307 → GitHub
+    Browser->>GH: GET /login/oauth/authorize?client_id&state
+    GH-->>Browser: authorization page
+    Browser->>GH: user clicks Authorize
+    GH->>BE: GET /auth/github/callback?code&state
+    BE->>BE: verify state cookie (CSRF check)
+    BE->>GH: POST /login/oauth/access_token
+    GH-->>BE: {access_token}
+    BE->>GH: GET /user  Bearer access_token
+    GH-->>BE: {id, login, avatar_url}
+    BE->>BE: upsertUser → sign JWT
+    BE-->>Browser: 307 → /auth/callback?token=JWT
+    Browser->>FE: load /auth/callback
+    FE->>FE: localStorage.setItem(token) + resetAuth()
+    FE->>BE: GET /auth/me  Authorization: Bearer JWT
+    BE-->>FE: {id, githubUsername, avatarUrl}
+    FE->>Browser: redirect → /dashboard
+```
+
+#### Snippet creation + async AI review
+
+```mermaid
+sequenceDiagram
+    actor Browser
+    participant FE as SvelteKit
+    participant BE as Go API
+    participant DB as MongoDB
+    participant Gemini
+    participant Hub as WS Hub
+
+    Browser->>FE: submit snippet form
+    FE->>BE: POST /graphql  createSnippet
+    BE->>DB: insertOne(snippets)
+    BE-->>FE: Snippet{id, title, ...} ← returns immediately
+    FE->>Browser: render snippet page (aiPending=true)
+    FE->>BE: WS /ws/:snippetId?token=JWT
+    BE->>Hub: register client in room
+
+    Note over BE,Gemini: goroutine — detached from request context
+    BE->>Gemini: GenerateContent(system prompt + code)
+    Gemini-->>BE: JSON {suggestions, complexity, refactorHints, ...}
+    BE->>DB: upsertOne(ai_reviews)
+    BE->>Hub: BroadcastToRoom(snippetId, ai_review_ready)
+    Hub->>FE: WS frame {type: ai_review_ready, payload: AIReview}
+    FE->>Browser: render AI review panel
+```
+
+---
+
 ## Tech stack
 
 | Layer        | Choice                                                         |
