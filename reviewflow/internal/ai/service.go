@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	modelName = "gemini-2.0-flash"
+	modelName = "gemini-2.5-flash"
 
 	// reviewTimeout bounds a single Gemini call (incl. the retry's own call).
 	reviewTimeout = 30 * time.Second
