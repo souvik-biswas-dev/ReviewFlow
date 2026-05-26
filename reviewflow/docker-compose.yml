@@ -1,0 +1,55 @@
+# Local development stack for ReviewFlow.
+#
+# Quick start:
+#   cp .env.example .env
+#   docker compose up        # Ctrl+C to stop
+#
+# The app service uses the prebuilt Air image for hot reload: edit any .go file
+# and the server rebuilds and restarts automatically.
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: reviewflow-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      # Named volume so database contents survive container restarts/rebuilds.
+      - mongo_data:/data/db
+    healthcheck:
+      # The app waits for this to pass (see depends_on) before connecting.
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  app:
+    # Prebuilt image that ships the Air live-reloader on top of Go.
+    image: cosmtrek/air:latest
+    container_name: reviewflow-app
+    working_dir: /app
+    # The image's entrypoint is `air`; override it so that on first boot we can
+    # resolve modules against the bind-mounted source, then hand off to Air.
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["go mod tidy && air -c .air.toml"]
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app
+      # Persist the module cache so deps aren't re-downloaded on every restart.
+      - go_mod_cache:/go/pkg/mod
+    env_file:
+      - .env
+    environment:
+      # Authoritative inside the Compose network: reach Mongo by service name,
+      # regardless of what MONGO_URI a developer's .env happens to contain.
+      - MONGO_URI=mongodb://mongo:27017
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+volumes:
+  mongo_data:
+  go_mod_cache:
