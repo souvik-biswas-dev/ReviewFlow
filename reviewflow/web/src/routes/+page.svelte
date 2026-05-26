@@ -125,7 +125,7 @@
 				<ExternalLink class="h-3.5 w-3.5" /> Portfolio
 			</a>
 			<a
-				href="https://github.com/devsouvikbiswas"
+				href="https://github.com/souvik-biswas-dev/"
 				target="_blank"
 				rel="noopener noreferrer"
 				class="flex items-center gap-1.5 transition hover:text-slate-300"
