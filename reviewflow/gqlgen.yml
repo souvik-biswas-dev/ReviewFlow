@@ -1,0 +1,51 @@
+# gqlgen configuration. Run `go run github.com/99designs/gqlgen generate` after
+# editing the schema to regenerate graph/generated.go and graph/model/*.
+
+# Where the schema lives.
+schema:
+  - graph/*.graphql
+
+# The big generated runtime (executable schema). Treat as machine-owned.
+exec:
+  filename: graph/generated.go
+  package: graph
+
+# Generated GraphQL models (inputs, enums, and the API-facing object types).
+# These are intentionally SEPARATE from the bson structs in internal/db: the
+# DB layer uses ObjectIDs/time.Time, the API layer uses string IDs, and the
+# resolvers translate between them.
+model:
+  filename: graph/model/models_gen.go
+  package: model
+
+# follow-schema layout: resolver.go holds the (hand-editable, preserved)
+# Resolver struct + dependencies; schema.resolvers.go holds the generated method
+# stubs. This plays well with adding deps (DB/Hub/AI) to Resolver, which
+# single-file mode resets on every regen.
+resolver:
+  layout: follow-schema
+  dir: graph
+  package: graph
+  filename_template: "{name}.resolvers.go"
+
+# Don't autobind to any existing package — generate fresh API models so the
+# DB structs and GraphQL structs can evolve independently.
+autobind: []
+
+# Scalar/type bindings + field-level resolver opt-ins.
+models:
+  ID:
+    model:
+      - github.com/99designs/gqlgen/graphql.ID
+  Int:
+    model:
+      - github.com/99designs/gqlgen/graphql.Int
+  Time:
+    model:
+      - github.com/99designs/gqlgen/graphql.Time
+  Snippet:
+    fields:
+      # aiReview is fetched lazily from the ai_reviews collection (it may not
+      # exist yet), so generate a field resolver instead of a plain struct field.
+      aiReview:
+        resolver: true

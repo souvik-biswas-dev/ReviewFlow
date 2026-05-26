@@ -1,0 +1,21 @@
+# Air configuration for live-reloading the Go server during development.
+# Air watches the source tree, rebuilds on change, and restarts the binary.
+# Docs: https://github.com/air-verse/air  (Air's home, formerly cosmtrek/air)
+
+root = "."
+tmp_dir = "tmp"
+
+[build]
+# Build only the server entrypoint into tmp/ and run it.
+cmd = "go build -o ./tmp/server ./cmd/server"
+bin = "./tmp/server"
+include_ext = ["go", "tmpl", "tpl", "html"]
+exclude_dir = ["tmp", "vendor"]
+delay = 200           # ms to debounce rapid saves before rebuilding
+stop_on_error = true  # don't run a stale binary when the build fails
+
+[log]
+time = true
+
+[misc]
+clean_on_exit = true  # remove tmp/ artifacts when Air stops
