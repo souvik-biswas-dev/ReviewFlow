@@ -10,6 +10,10 @@
 	setContextClient(createUrqlClient());
 </script>
 
+<svelte:head>
+	<title>ReviewFlow</title>
+</svelte:head>
+
 <!-- Ambient aurora backdrop: three slow-drifting blurred orbs. -->
 <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
 	<div

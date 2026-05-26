@@ -152,6 +152,10 @@
 	});
 </script>
 
+<svelte:head>
+	<title>{snippet ? `${snippet.title} · ReviewFlow` : 'ReviewFlow'}</title>
+</svelte:head>
+
 <div class="flex h-screen flex-col">
 	<!-- Presence bar / header -->
 	<header class="flex items-center justify-between gap-4 border-b border-white/5 px-5 py-3.5">

@@ -50,6 +50,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>New Snippet · ReviewFlow</title>
+</svelte:head>
+
 <div class="mx-auto flex min-h-screen max-w-4xl flex-col px-6">
 	<header class="flex items-center justify-between py-6">
 		<a

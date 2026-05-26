@@ -44,6 +44,10 @@
 	});
 </script>
 
+<svelte:head>
+	<title>Dashboard · ReviewFlow</title>
+</svelte:head>
+
 <div class="mx-auto flex min-h-screen max-w-7xl flex-col px-6">
 	<!-- Top bar -->
 	<header class="flex items-center justify-between py-6">
