@@ -1,8 +1,19 @@
 <script lang="ts">
-	import { Github, Radio, Sparkles, ShieldCheck, ArrowRight } from 'lucide-svelte';
+	import { Github, Radio, Sparkles, ShieldCheck, ArrowRight, ExternalLink } from 'lucide-svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import { loginWithGitHub } from '$lib/stores/auth';
+
+	const stack = [
+		'SvelteKit · Svelte 5',
+		'Go · Gin',
+		'GraphQL · gqlgen',
+		'MongoDB',
+		'WebSockets',
+		'Gemini AI',
+		'Cloudflare Pages',
+		'Render'
+	];
 
 	const features = [
 		{
@@ -63,7 +74,7 @@
 	</section>
 
 	<!-- Feature grid -->
-	<section class="grid grid-cols-1 gap-4 pb-20 md:grid-cols-3">
+	<section class="grid grid-cols-1 gap-4 md:grid-cols-3">
 		{#each features as f, i (f.title)}
 			<div
 				class="glass glass-hover animate-fade-up rounded-2xl p-6"
@@ -79,4 +90,48 @@
 			</div>
 		{/each}
 	</section>
+
+	<!-- Footer -->
+	<footer class="mt-16 border-t border-white/5 py-10 text-center">
+		<p class="text-sm text-slate-400">
+			Designed, architected &amp; engineered by
+			<a
+				href="https://souvikbiswas-portfolio.pages.dev"
+				target="_blank"
+				rel="noopener noreferrer"
+				class="font-semibold text-slate-200 transition hover:text-aurora-violet"
+			>
+				Souvik Biswas
+			</a>
+		</p>
+
+		<div class="mt-4 flex flex-wrap items-center justify-center gap-2">
+			{#each stack as s (s)}
+				<span
+					class="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-slate-500"
+				>
+					{s}
+				</span>
+			{/each}
+		</div>
+
+		<div class="mt-5 flex items-center justify-center gap-6 text-sm text-slate-500">
+			<a
+				href="https://souvikbiswas-portfolio.pages.dev"
+				target="_blank"
+				rel="noopener noreferrer"
+				class="flex items-center gap-1.5 transition hover:text-slate-300"
+			>
+				<ExternalLink class="h-3.5 w-3.5" /> Portfolio
+			</a>
+			<a
+				href="https://github.com/devsouvikbiswas"
+				target="_blank"
+				rel="noopener noreferrer"
+				class="flex items-center gap-1.5 transition hover:text-slate-300"
+			>
+				<Github class="h-3.5 w-3.5" /> GitHub
+			</a>
+		</div>
+	</footer>
 </div>
