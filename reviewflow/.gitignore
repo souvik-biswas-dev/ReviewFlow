@@ -1,0 +1,20 @@
+# Build artifacts
+/tmp/
+/bin/
+*.exe
+
+# Local environment — never commit secrets
+.env
+
+# Editor / OS noise
+.DS_Store
+.idea/
+.vscode/
+
+# Frontend build output & generated files
+web/node_modules/
+web/build/
+web/.svelte-kit/
+
+# CV / personal docs
+cv.md
