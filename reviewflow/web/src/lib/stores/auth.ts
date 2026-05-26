@@ -23,9 +23,17 @@ export function initAuth(): Promise<User | null> {
 	return initPromise;
 }
 
+export function getStoredToken(): string | null {
+	if (!browser) return null;
+	return localStorage.getItem('rf_token');
+}
+
 async function fetchMe(): Promise<User | null> {
 	try {
-		const res = await fetch(AUTH_ME_URL, { credentials: 'include' });
+		const token = getStoredToken();
+		const headers: Record<string, string> = {};
+		if (token) headers['Authorization'] = `Bearer ${token}`;
+		const res = await fetch(AUTH_ME_URL, { credentials: 'include', headers });
 		if (!res.ok) {
 			store.set({ user: null, loading: false });
 			return null;
@@ -51,5 +59,8 @@ export function loginWithGitHub(): void {
 export function logout(): void {
 	store.set({ user: null, loading: false });
 	initPromise = Promise.resolve(null);
-	if (browser) window.location.href = '/';
+	if (browser) {
+		localStorage.removeItem('rf_token');
+		window.location.href = '/';
+	}
 }

@@ -130,7 +130,11 @@ func (h *Handler) GitHubCallback(c *gin.Context) {
 	setSessionCookie(c, token, h.isProduction())
 
 	// 6. Hand the browser back to the SvelteKit app.
-	c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL)
+	// Also pass the token as a query param so the frontend can store it in
+	// localStorage — required when frontend and backend are on different domains
+	// (cross-origin cookies are blocked by Chrome's Privacy Sandbox).
+	redirectURL := h.cfg.FrontendURL + "/auth/callback?token=" + token
+	c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }
 
 // Me (GET /auth/me, behind AuthMiddleware) returns the current user.

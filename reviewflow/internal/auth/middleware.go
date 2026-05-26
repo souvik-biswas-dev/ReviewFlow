@@ -42,11 +42,22 @@ func UserIDFromContext(ctx context.Context) (string, bool) {
 // It's written as a factory (returns the handler) rather than a bare
 // func(*gin.Context) so the JWT secret can be injected from config instead of
 // living in a package global.
+// extractToken reads the JWT from the Authorization header ("Bearer <tok>")
+// first, then falls back to the HttpOnly cookie. This supports both cross-origin
+// deployments (token in localStorage → header) and same-origin (cookie).
+func extractToken(c *gin.Context) string {
+	if h := c.GetHeader("Authorization"); len(h) > 7 && h[:7] == "Bearer " {
+		return h[7:]
+	}
+	tok, _ := c.Cookie(CookieName)
+	return tok
+}
+
 func AuthMiddleware(secret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		tokenString, err := c.Cookie(CookieName)
-		if err != nil {
-			unauthorized(c, "missing authentication cookie")
+		tokenString := extractToken(c)
+		if tokenString == "" {
+			unauthorized(c, "missing authentication token")
 			return
 		}
 
@@ -58,20 +69,17 @@ func AuthMiddleware(secret string) gin.HandlerFunc {
 
 		c.Set(ContextUserIDKey, claims.UserID)
 		c.Set(ContextUsernameKey, claims.GitHubUsername)
-		// Also thread the id through the std context so non-Gin layers (GraphQL
-		// resolvers) can read it.
 		c.Request = c.Request.WithContext(WithUserID(c.Request.Context(), claims.UserID))
 		c.Next()
 	}
 }
 
 // GraphQLContext is a *soft* counterpart to AuthMiddleware for the /graphql
-// endpoint: if a valid session cookie is present it injects the user id into
-// the request context, but it never aborts. This lets public queries run
-// anonymously while resolvers that require auth check UserIDFromContext.
+// endpoint: if a valid session token is present it injects the user id into
+// the request context, but it never aborts.
 func GraphQLContext(secret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if tokenString, err := c.Cookie(CookieName); err == nil {
+		if tokenString := extractToken(c); tokenString != "" {
 			if claims, err := ParseToken(secret, tokenString); err == nil {
 				c.Request = c.Request.WithContext(WithUserID(c.Request.Context(), claims.UserID))
 			}
