@@ -33,6 +33,7 @@
 	let reviews = $state<Review[]>([]);
 	let aiReview = $state<AIReview | null>(null);
 	let aiPending = $state(false);
+	let aiPendingTimer: ReturnType<typeof setTimeout> | null = null;
 
 	let viewers = $state<Presence[]>([]);
 	let typingNames = $state<string[]>([]);
@@ -67,6 +68,15 @@
 			reviews = s.reviews ?? [];
 			aiReview = s.aiReview;
 			aiPending = !s.aiReview;
+			// If the AI review hasn't arrived yet, give it 60 s before
+			// switching to the "not available" state — prevents an infinite
+			// skeleton when the backend AI job failed silently.
+			if (aiPending) {
+				if (aiPendingTimer) clearTimeout(aiPendingTimer);
+				aiPendingTimer = setTimeout(() => {
+					if (aiPending) aiPending = false;
+				}, 60_000);
+			}
 		}
 		loading = false;
 	}
@@ -138,6 +148,7 @@
 			ws.on('presence_leave', (p) => (viewers = viewers.filter((v) => v.userId !== p.userId))),
 			ws.on('review_added', (r) => upsertReview(r)),
 			ws.on('ai_review_ready', (r) => {
+				if (aiPendingTimer) { clearTimeout(aiPendingTimer); aiPendingTimer = null; }
 				aiReview = r;
 				aiPending = false;
 			}),
@@ -147,6 +158,7 @@
 		return () => {
 			offs.forEach((off) => off());
 			ws.disconnect();
+			if (aiPendingTimer) clearTimeout(aiPendingTimer);
 			for (const t of typingTimers.values()) clearTimeout(t);
 		};
 	});

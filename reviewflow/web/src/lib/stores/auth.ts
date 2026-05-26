@@ -23,6 +23,16 @@ export function initAuth(): Promise<User | null> {
 	return initPromise;
 }
 
+/**
+ * Reset the memoized initAuth promise so the next initAuth() call re-fetches
+ * /auth/me. Call this after writing a new token to localStorage (e.g. in the
+ * OAuth callback page) so the cached "not logged in" result is discarded.
+ */
+export function resetAuth(): void {
+	initPromise = null;
+	store.set({ user: null, loading: true });
+}
+
 export function getStoredToken(): string | null {
 	if (!browser) return null;
 	return localStorage.getItem('rf_token');

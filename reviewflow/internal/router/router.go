@@ -63,7 +63,9 @@ func registerNotifications(r *gin.Engine, cfg *config.Config, database *db.Clien
 	g.POST("/read", h.MarkAllRead)
 }
 
-// registerHealth wires GET /health with a live DB ping.
+// registerHealth wires GET and HEAD /health with a live DB ping.
+// Gin does not automatically handle HEAD for GET routes, so we register both.
+// UptimeRobot (and many other monitors) default to HEAD requests.
 func registerHealth(r *gin.Engine, database *db.Client) {
 	r.GET("/health", func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
@@ -74,6 +76,17 @@ func registerHealth(r *gin.Engine, database *db.Client) {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "db": "connected"})
+	})
+	// HEAD variant: same liveness check, no body (HEAD responses must omit body).
+	r.HEAD("/health", func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
+		defer cancel()
+
+		if err := database.Mongo.Ping(ctx, readpref.Primary()); err != nil {
+			c.Status(http.StatusServiceUnavailable)
+			return
+		}
+		c.Status(http.StatusOK)
 	})
 }
 

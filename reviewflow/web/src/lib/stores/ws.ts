@@ -21,8 +21,10 @@ export interface WsStore {
 	on<K extends WsMessageType>(type: K, handler: Handler<K>): () => void;
 }
 
-// Reconnect schedule: 3 attempts with exponential backoff (1s, 2s, 4s).
-const BACKOFF_MS = [1000, 2000, 4000];
+// Reconnect schedule: exponential backoff up to ~2 minutes.
+// Render's free tier can take 50 s+ to cold-start, so we keep retrying well
+// past that window before giving up.
+const BACKOFF_MS = [1000, 2000, 4000, 8000, 16000, 32000, 60000];
 const HEARTBEAT_MS = 25_000;
 
 /**
