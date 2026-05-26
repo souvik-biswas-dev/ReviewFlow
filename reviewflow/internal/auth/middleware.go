@@ -42,12 +42,16 @@ func UserIDFromContext(ctx context.Context) (string, bool) {
 // It's written as a factory (returns the handler) rather than a bare
 // func(*gin.Context) so the JWT secret can be injected from config instead of
 // living in a package global.
-// extractToken reads the JWT from the Authorization header ("Bearer <tok>")
-// first, then falls back to the HttpOnly cookie. This supports both cross-origin
-// deployments (token in localStorage → header) and same-origin (cookie).
+// extractToken reads the JWT from (in order):
+// 1. Authorization header ("Bearer <tok>") — used by fetch/GraphQL
+// 2. ?token= query param — used by WebSocket (browsers can't set WS headers)
+// 3. HttpOnly cookie — fallback for same-origin deployments
 func extractToken(c *gin.Context) string {
 	if h := c.GetHeader("Authorization"); len(h) > 7 && h[:7] == "Bearer " {
 		return h[7:]
+	}
+	if t := c.Query("token"); t != "" {
+		return t
 	}
 	tok, _ := c.Cookie(CookieName)
 	return tok

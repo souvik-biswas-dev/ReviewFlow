@@ -82,7 +82,9 @@ export function createWsStore(): WsStore {
 		if (!browser || !snippetId) return;
 
 		status.set(attempt === 0 ? 'connecting' : 'reconnecting');
-		const ws = new WebSocket(wsUrlFor(snippetId));
+		const token = localStorage.getItem('rf_token');
+		const url = wsUrlFor(snippetId) + (token ? `?token=${encodeURIComponent(token)}` : '');
+		const ws = new WebSocket(url);
 		socket = ws;
 
 		ws.onopen = () => {
