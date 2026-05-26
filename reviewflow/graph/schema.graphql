@@ -1,0 +1,113 @@
+# ReviewFlow GraphQL schema.
+#
+# Conventions:
+#   - `ID` values are MongoDB ObjectIDs rendered as hex strings.
+#   - `Time` is an RFC-3339 timestamp (mapped to Go's time.Time via gqlgen).
+
+scalar Time
+
+# ---------------------------------------------------------------------------
+# Types
+# ---------------------------------------------------------------------------
+
+type User {
+  id: ID!
+  githubUsername: String!
+  avatarUrl: String!
+  createdAt: Time!
+}
+
+type Snippet {
+  id: ID!
+  title: String!
+  language: String!
+  code: String!
+  previousVersion: String # optional prior code; enables the diff viewer
+  author: User!
+  reviews: [Review!]! # human review comments (flat; client nests by parentReviewId)
+  aiReview: AIReview # null until the AI pass has run (Phase 3–4)
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+type Review {
+  id: ID!
+  snippetId: ID!
+  author: User!
+  body: String!
+  lineNumber: Int # null = a general comment not anchored to a line
+  parentReviewId: ID # null for top-level reviews; set on replies (1 level deep)
+  createdAt: Time!
+}
+
+# An AI-generated review produced by the Gemini service. Resolved lazily from
+# the ai_reviews collection (see Snippet.aiReview).
+type AIReview {
+  id: ID!
+  snippetId: ID!
+  suggestions: [String!]! # specific, line-level improvement comments (<= 5)
+  complexity: String! # Big-O time + space, e.g. "O(n log n) time, O(n) space"
+  refactorHints: [String!]! # concrete refactors with reasoning (<= 3)
+  securityFlags: [String!]! # security issues; [] if none
+  qualityScore: Int! # overall quality, 1-10
+  language: String!
+  generatedAt: Time!
+}
+
+# Emitted over the presence subscription as users join/leave/view a snippet.
+type PresenceEvent {
+  snippetId: ID!
+  user: User!
+  status: PresenceStatus!
+  at: Time!
+}
+
+enum PresenceStatus {
+  JOINED
+  LEFT
+  VIEWING
+}
+
+# ---------------------------------------------------------------------------
+# Inputs
+# ---------------------------------------------------------------------------
+
+input CreateSnippetInput {
+  title: String!
+  language: String!
+  code: String!
+  previousVersion: String # if provided, the diff viewer becomes available
+}
+
+input AddReviewInput {
+  body: String!
+  lineNumber: Int
+  parentReviewId: ID # set to reply to an existing top-level review
+}
+
+# ---------------------------------------------------------------------------
+# Operations
+# ---------------------------------------------------------------------------
+
+type Query {
+  "Fetch a single snippet by id."
+  snippet(id: ID!): Snippet
+  "List snippets, optionally filtered by author and/or language."
+  snippets(authorId: ID, language: String, limit: Int): [Snippet!]!
+  "The currently authenticated user, or null if not logged in."
+  me: User
+}
+
+type Mutation {
+  "Create a snippet authored by the current user."
+  createSnippet(input: CreateSnippetInput!): Snippet!
+  "Add a human review comment to a snippet."
+  addReview(snippetId: ID!, input: AddReviewInput!): Review!
+}
+
+type Subscription {
+  "Fires whenever a new review is added to the given snippet."
+  reviewAdded(snippetId: ID!): Review!
+  "Fires when a user's presence on the given snippet changes."
+  presenceUpdated(snippetId: ID!): PresenceEvent!
+}
