@@ -176,15 +176,13 @@ to `'self'` (plus Google Fonts and GitHub avatars), `X-Frame-Options: DENY`,
 
 ## Screenshots
 
-> _Replace these with real captures after deploying._
-
-| Page                | Image                                    |
-| ------------------- | ---------------------------------------- |
-| Landing             | ![landing](docs/screenshots/landing.png) |
-| Dashboard           | ![dashboard](docs/screenshots/dashboard.png) |
-| Snippet — reviews   | ![snippet](docs/screenshots/snippet.png) |
-| Snippet — AI review | ![ai-review](docs/screenshots/ai.png)    |
-| Snippet — diff view | ![diff](docs/screenshots/diff.png)       |
+| Page                | Image                                  |
+| ------------------- | -------------------------------------- |
+| Landing             | ![landing](landingpage.png)            |
+| Dashboard           | ![dashboard](dashboard.png)            |
+| Snippet — reviews   | ![snippet](snippetreview.png)          |
+| Snippet — AI review | ![ai-review](aireview.png)             |
+| Snippet — diff view | ![diff](diffview.png)                  |
 
 ---
 
