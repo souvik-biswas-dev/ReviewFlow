@@ -57,7 +57,19 @@ func (h *Handler) GitHubLogin(c *gin.Context) {
 	}
 	// Remember the state in a short-lived HttpOnly cookie so we can verify, on
 	// the callback, that the response corresponds to a request we initiated.
-	c.SetCookie(oauthStateCookie, state, 600 /*10 min*/, "/", "", h.isProduction(), true)
+	stateSameSite := http.SameSiteLaxMode
+	if h.isProduction() {
+		stateSameSite = http.SameSiteNoneMode
+	}
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     oauthStateCookie,
+		Value:    state,
+		Path:     "/",
+		MaxAge:   600,
+		HttpOnly: true,
+		SameSite: stateSameSite,
+		Secure:   h.isProduction(),
+	})
 
 	q := url.Values{}
 	q.Set("client_id", h.cfg.GitHubClientID)
@@ -264,18 +276,23 @@ func (h *Handler) isProduction() bool {
 	return h.cfg.Environment == "production"
 }
 
-// setSessionCookie writes the JWT as an HttpOnly, SameSite=Strict cookie.
-// We use http.SetCookie (not Gin's SetCookie) because Gin's helper doesn't
-// expose the SameSite attribute. Secure is on in production (HTTPS) and off in
-// development so localhost auth works without TLS.
+// setSessionCookie writes the JWT as an HttpOnly cookie.
+// In production the frontend and backend are on different domains (Cloudflare
+// Pages + Render), so we need SameSite=None + Secure for the browser to send
+// the cookie on cross-origin requests. In development we use SameSite=Lax so
+// localhost auth works without TLS.
 func setSessionCookie(c *gin.Context, token string, secure bool) {
+	sameSite := http.SameSiteLaxMode
+	if secure {
+		sameSite = http.SameSiteNoneMode // cross-origin cookies require Secure + SameSite=None
+	}
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:     CookieName,
 		Value:    token,
 		Path:     "/",
 		MaxAge:   int(tokenTTL.Seconds()),
-		HttpOnly: true,                    // not readable by JS — mitigates XSS token theft
-		SameSite: http.SameSiteStrictMode, // cookie only sent on same-site requests
+		HttpOnly: true,
+		SameSite: sameSite,
 		Secure:   secure,
 	})
 }
