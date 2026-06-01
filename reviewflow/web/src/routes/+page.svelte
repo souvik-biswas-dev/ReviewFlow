@@ -5,14 +5,12 @@
 	import { loginWithGitHub } from '$lib/stores/auth';
 
 	const stack = [
-		'SvelteKit · Svelte 5',
-		'Go · Gin',
-		'GraphQL · gqlgen',
-		'MongoDB',
-		'WebSockets',
-		'Gemini AI',
-		'Cloudflare Pages',
-		'Render'
+		{ name: 'SvelteKit', slug: 'svelte' },
+		{ name: 'Go', slug: 'go' },
+		{ name: 'GraphQL', slug: 'graphql' },
+		{ name: 'MongoDB', slug: 'mongodb' },
+		{ name: 'Cloudflare', slug: 'cloudflare' },
+		{ name: 'Render', slug: 'render' }
 	];
 
 	const features = [
@@ -105,13 +103,16 @@
 			</a>
 		</p>
 
-		<div class="mt-4 flex flex-wrap items-center justify-center gap-2">
-			{#each stack as s (s)}
-				<span
-					class="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-slate-500"
-				>
-					{s}
-				</span>
+		<div class="mt-4 flex flex-wrap items-center justify-center gap-5">
+			{#each stack as s (s.slug)}
+				<div class="flex flex-col items-center gap-1.5 opacity-50 transition hover:opacity-100" title={s.name}>
+					<img
+						src={`https://cdn.simpleicons.org/${s.slug}/ffffff`}
+						alt={s.name}
+						class="h-5 w-5"
+					/>
+					<span class="text-[10px] text-slate-500">{s.name}</span>
+				</div>
 			{/each}
 		</div>
 
