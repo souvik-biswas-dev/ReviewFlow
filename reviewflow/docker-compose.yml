@@ -4,8 +4,8 @@
 #   cp .env.example .env
 #   docker compose up        # Ctrl+C to stop
 #
-# The app service uses the prebuilt Air image for hot reload: edit any .go file
-# and the server rebuilds and restarts automatically.
+# The app service runs the TypeScript sources directly under `node --watch`:
+# edit any file under server/src and the server restarts automatically.
 
 services:
   mongo:
@@ -26,20 +26,19 @@ services:
       start_period: 20s
 
   app:
-    # Prebuilt image that ships the Air live-reloader on top of Go.
-    image: cosmtrek/air:latest
+    image: node:24-alpine
     container_name: reviewflow-app
     working_dir: /app
-    # The image's entrypoint is `air`; override it so that on first boot we can
-    # resolve modules against the bind-mounted source, then hand off to Air.
-    entrypoint: ["/bin/sh", "-c"]
-    command: ["go mod tidy && air -c .air.toml"]
+    # Resolve dependencies against the bind-mounted source on first boot, then
+    # hand off to the watcher.
+    command: ["sh", "-c", "npm install && npm run dev"]
     ports:
       - "8080:8080"
     volumes:
-      - .:/app
-      # Persist the module cache so deps aren't re-downloaded on every restart.
-      - go_mod_cache:/go/pkg/mod
+      - ./server:/app
+      # Keep container-installed modules out of the host tree (and vice versa):
+      # the two platforms don't necessarily share native builds.
+      - node_modules:/app/node_modules
     env_file:
       - .env
     environment:
@@ -52,4 +51,4 @@ services:
 
 volumes:
   mongo_data:
-  go_mod_cache:
+  node_modules:

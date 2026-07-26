@@ -6,7 +6,7 @@
 #
 # Three services:
 #   - mongo    : persistent database, auth enabled, no exposed port.
-#   - backend  : distroless Go binary, no exposed port (Caddy reaches it
+#   - backend  : compiled Node server, no exposed port (Caddy reaches it
 #                internally on the compose network).
 #   - caddy    : SPA host + reverse proxy + automatic HTTPS via Let's Encrypt.
 #
@@ -44,7 +44,7 @@ services:
 
   backend:
     build:
-      context: .
+      context: ./server
       dockerfile: Dockerfile
     restart: unless-stopped
     # All backend config (incl. MONGO_URI with credentials, JWT_SECRET,
