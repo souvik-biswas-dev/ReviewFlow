@@ -3,7 +3,7 @@
 # Production image for the ReviewFlow frontend.
 #   Stage 1 (builder) : npm ci + vite build -> static SPA in /app/build
 #   Stage 2 (caddy)   : Caddy serves the SPA AND reverse-proxies API/WS calls
-#                       to the Go backend. Single edge container, automatic
+#                       to the Node backend. Single edge container, automatic
 #                       HTTPS via Let's Encrypt.
 
 # --- builder ---------------------------------------------------------------
