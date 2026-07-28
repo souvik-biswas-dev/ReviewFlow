@@ -4,8 +4,8 @@
 
 ReviewFlow is a self-hostable code-review platform: drop in a snippet, share
 the link, and watch reviews stream in live while Google Gemini analyses the
-code in the background. It pairs a Go (Gin) backend with a Svelte 5 frontend
-over GraphQL and a hand-rolled WebSocket hub.
+code in the background. It pairs a Node.js (Express + TypeScript) backend with
+a Svelte 5 frontend over GraphQL and a hand-rolled WebSocket hub.
 
 Built by [Souvik Biswas](https://souvikbiswas-portfolio.pages.dev)
 
@@ -31,18 +31,18 @@ Built by [Souvik Biswas](https://souvikbiswas-portfolio.pages.dev)
                                │ http :8080
                                ▼
             ┌──────────────────────────────────────┐
-            │   Go backend (Gin + gqlgen)          │
+            │   Node backend (Express + graphql-js) │
             │  · GraphQL resolvers (snippets,      │
             │    reviews, AI review field)         │
-            │  · WebSocket room hub (one Run()     │
-            │    goroutine, RWMutex-guarded map)   │
+            │  · WebSocket room hub (Map of rooms, │
+            │    single-threaded event loop)       │
             │  · JWT auth, GitHub OAuth            │
             │  · Notifications REST endpoint       │
             └────┬───────────────────────┬─────────┘
                  │                       │
                  ▼                       ▼
         ┌────────────────┐      ┌──────────────────┐
-        │   MongoDB 7    │      │  Gemini 2.0      │
+        │   MongoDB 7    │      │  Gemini 2.5      │
         │   users        │      │  Flash (free)    │
         │   snippets     │      │  · async pipeline│
         │   reviews      │      │  · structured    │
@@ -113,45 +113,44 @@ classDiagram
     }
 
     class Hub {
-        -map~string,Client~ rooms
-        -chan register
-        -chan unregister
-        -chan broadcast
-        -RWMutex mu
-        +Run()
-        +BroadcastToRoom(id, msg)
-        +RoomPresence(id) Presence[]
+        -Map~string,Set~Client~~ rooms
+        +register(client)
+        +unregister(client)
+        +broadcastToRoom(id, msg)
+        +relay(from, data)
+        +roomPresence(id) Presence[]
+        +closeAll()
     }
 
     class Client {
-        -Conn conn
+        -WebSocket socket
         -string snippetId
         -string userId
         -string username
-        -chan send
-        -chan done
-        +readPump()
-        +writePump()
+        -Timeout pingTimer
+        -Timeout deadlineTimer
+        +start()
+        +trySend(data) bool
+        +close()
     }
 
     class AIService {
-        -GenerativeModel model
-        -Limiter limiter
-        -Client db
+        -ContentGenerator generator
+        -RateLimiter limiter
+        -DBClient db
         -Hub hub
-        +ReviewCode(id, lang, code)
+        +reviewCode(id, lang, code)
         -generateWithRetry(prompt)
         -save(review)
         -broadcast(review)
     }
 
-    class AuthHandler {
+    class AuthRouter {
         -Config cfg
-        -Client db
-        -HttpClient http
-        +GitHubLogin(c)
-        +GitHubCallback(c)
-        +Me(c)
+        -DBClient db
+        +githubLogin(req, res)
+        +githubCallback(req, res)
+        +me(req, res)
     }
 
     User "1" --> "*" Snippet : authors
@@ -163,7 +162,7 @@ classDiagram
     Hub "1" o-- "*" Client : manages
     AIService ..> Hub : broadcasts via
     AIService ..> AIReview : produces
-    AuthHandler ..> User : upserts
+    AuthRouter ..> User : upserts
 ```
 
 ### Sequence diagrams
@@ -174,7 +173,7 @@ classDiagram
 sequenceDiagram
     actor Browser
     participant FE as SvelteKit (CF Pages)
-    participant BE as Go API (Render)
+    participant BE as Node API
     participant GH as GitHub
 
     Browser->>FE: click "Sign in with GitHub"
@@ -204,7 +203,7 @@ sequenceDiagram
 sequenceDiagram
     actor Browser
     participant FE as SvelteKit
-    participant BE as Go API
+    participant BE as Node API
     participant DB as MongoDB
     participant Gemini
     participant Hub as WS Hub
@@ -217,11 +216,11 @@ sequenceDiagram
     FE->>BE: WS /ws/:snippetId?token=JWT
     BE->>Hub: register client in room
 
-    Note over BE,Gemini: goroutine — detached from request context
-    BE->>Gemini: GenerateContent(system prompt + code)
+    Note over BE,Gemini: floating promise — detached from the request
+    BE->>Gemini: generateContent(system prompt + code)
     Gemini-->>BE: JSON {suggestions, complexity, refactorHints, ...}
-    BE->>DB: upsertOne(ai_reviews)
-    BE->>Hub: BroadcastToRoom(snippetId, ai_review_ready)
+    BE->>DB: findOneAndReplace(ai_reviews, upsert)
+    BE->>Hub: broadcastToRoom(snippetId, ai_review_ready)
     Hub->>FE: WS frame {type: ai_review_ready, payload: AIReview}
     FE->>Browser: render AI review panel
 ```
@@ -234,15 +233,15 @@ sequenceDiagram
 | ------------ | -------------------------------------------------------------- |
 | Frontend     | SvelteKit (Svelte 5 runes) · TypeScript · Tailwind CSS         |
 | Editor       | CodeMirror 6 · diff2html · jsdiff                              |
-| GraphQL      | `@urql/svelte` on the client · `gqlgen` on the server          |
-| Realtime     | Native browser WebSocket ↔ `gorilla/websocket` room hub        |
-| Backend      | Go · Gin · `golang-jwt/jwt/v5` · `mongo-driver`                |
-| AI           | Google Gemini 2.0 Flash via `generative-ai-go`                 |
-| Rate limit   | `golang.org/x/time/rate` (10 req/min, under free-tier quota)   |
-| Auth         | GitHub OAuth → HttpOnly · SameSite=Strict cookie               |
+| GraphQL      | `@urql/svelte` on the client · `graphql-js` + `graphql-http`   |
+| Realtime     | Native browser WebSocket ↔ `ws` room hub                       |
+| Backend      | Node 24 · TypeScript · Express 5 · `jsonwebtoken` · `mongodb`  |
+| AI           | Google Gemini 2.5 Flash via `@google/genai`                    |
+| Rate limit   | Hand-rolled token bucket (10 req/min, under free-tier quota)   |
+| Auth         | GitHub OAuth → HttpOnly session cookie (+ Bearer token)        |
 | Database     | MongoDB 7 (auth enabled in production)                         |
 | Edge / TLS   | Caddy 2 — automatic Let's Encrypt                              |
-| Packaging    | Docker · multi-stage builds · distroless final image           |
+| Packaging    | Docker · multi-stage builds · non-root runtime image           |
 
 ---
 
@@ -263,9 +262,12 @@ cp .env.example .env
 #    Gemini key (free tier):     https://aistudio.google.com/apikey
 #    Then edit .env to fill in GITHUB_CLIENT_ID/SECRET, JWT_SECRET, GEMINI_API_KEY
 
-# 3. Start the backend stack (Go + MongoDB, with hot reload via Air)
+# 3. Start the backend stack (Node + MongoDB, with hot reload via node --watch)
 docker compose up
 # -> backend on :8080, /health returns {"status":"ok","db":"connected"}
+#
+#    Prefer running the server on the host? Point MONGO_URI at localhost and:
+#      cd server && npm install && npm run dev
 
 # 4. In another shell, start the frontend dev server
 cd web
@@ -284,9 +286,10 @@ Gemini AI review appears moments later.
 | `docker compose up`                                        | Backend + MongoDB with hot reload             |
 | `cd web && npm run dev`                                    | Frontend dev server (Vite)                    |
 | `cd web && npm run check`                                  | TypeScript + Svelte type check                |
-| `go vet ./... && go build ./...`                           | Backend type / build check                    |
-| `go test ./internal/ai/...`                                | Unit tests for the Gemini parser              |
-| `go run github.com/99designs/gqlgen generate`              | Regenerate GraphQL bindings after schema edit |
+| `cd server && npm run dev`                                 | Backend on the host, restarts on save         |
+| `cd server && npm run typecheck`                           | Backend type check (sources + tests)          |
+| `cd server && npm test`                                    | Unit tests (Gemini parser, rate limiter)      |
+| `cd server && npm run build`                               | Compile TypeScript to `dist/`                 |
 
 ---
 
@@ -338,8 +341,9 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 This brings up:
 
 - **mongo** — authenticated MongoDB, no exposed port, healthchecked.
-- **backend** — multi-stage Go build into `gcr.io/distroless/static:nonroot`
-  (≈10 MB, no shell, runs as uid 65532).
+- **backend** — multi-stage Node build: TypeScript compiled to `dist/`, then
+  copied alongside production-only `node_modules` into a `node:24-alpine`
+  runtime that runs as the unprivileged `node` user.
 - **caddy** — multi-stage Node build of the SvelteKit SPA + a Caddy 2 image
   that serves it and reverse-proxies `/graphql`, `/auth/*`, `/ws/*`,
   `/notifications`, and `/health` to the backend. HTTPS is provisioned
@@ -366,57 +370,54 @@ to `'self'` (plus Google Fonts and GitHub avatars), `X-Frame-Options: DENY`,
 ## How the WebSocket hub works
 
 The hub is the heart of ReviewFlow's real-time layer. It lives in
-[`internal/ws`](internal/ws) and follows a strict **single-writer actor**
-model:
+[`server/src/ws`](reviewflow/server/src/ws) and keeps every room mutation
+funnelled through one object:
 
 ```
-         per-client goroutines              single hub goroutine
-  ┌─────────────────────────────┐        ┌─────────────────────────┐
-  │  readPump  (1 per client)   │        │       Hub.Run()         │
-  │   • parse inbound frames    │        │  owns rooms map:        │
-  │   • JSON "ping" → "pong"    │        │   snippetId → {clients} │
-  │   • "typing"  → broadcast ──┼──┐     │                         │
-  │   • on exit   → unregister ─┼┐ │     │  for { select {         │
-  │                              ││ ├───▶│    <-register           │
-  │  writePump (1 per client)   ││ │     │    <-unregister         │
-  │   • drains <-send (buf 256)◀┼┼─┼─────┤    <-broadcast          │
-  │   • ticker → WS ping frame  ││ │     │  } }                    │
-  │   • <-done → close, return ◀┼┼─┼─────┤                         │
-  └──────────────────────────────┘│ │     │  RWMutex; Run is the    │
-                                    │ │     │  only writer of rooms. │
-  register / unregister / broadcast │ │     └────────────▲────────────┘
-        (unbuffered channels) ──────┘ │                  │
-                                       │   BroadcastToRoom(id, msg)
-                            GraphQL resolvers / Gemini service
+        per-connection callbacks                  the Hub (shared)
+  ┌────────────────────────────────┐       ┌──────────────────────────┐
+  │  Client (1 per socket)         │       │  rooms:                  │
+  │   • "message" → parse frame    │       │   Map<snippetId,         │
+  │   • "ping"    → pong           │       │       Set<Client>>       │
+  │   • "typing"  → hub.relay ─────┼──────▶│                          │
+  │   • "close"   → hub.unregister ┼──────▶│  register / unregister / │
+  │   • ping timer → WS ping frame │       │  deliver — plain method  │
+  │   • deadline timer → terminate │◀──────┤  calls; fan-out is a     │
+  └────────────────────────────────┘       │  non-blocking send.      │
+                   ▲                       └────────────▲─────────────┘
+                   └────────────────────────────────────┘
+                        broadcastToRoom(id, msg)
+                   GraphQL resolvers / Gemini service
 ```
 
 ### Guarantees
 
-- **Single writer.** Only `Run()` mutates the rooms map. Producers block on
-  unbuffered channels until `Run()` picks up their intent, so there is no
-  reorder window.
-- **Mutex for read fan-out.** Reads from other goroutines (presence snapshots
-  for the GraphQL layer, broadcast fan-out) hold an `RWMutex` read lock; the
-  writer holds a write lock. The mutex is there to make _those_ reads safe,
-  not to serialise writes (the single-goroutine discipline does that).
-- **Slow-client eviction is bounded.** Fan-out sends are non-blocking; a
-  client whose 256-slot buffer fills is evicted. Eviction recurses through
-  a presence_leave broadcast, but the eviction itself first deletes the
-  client from the map, so recursion depth ≤ room size.
-- **Multi-sender-safe.** Both the hub _and_ a client's `readPump` write to
-  `send` (the pong reply path). The hub therefore **never closes `send`**;
-  it closes a per-client `done` channel exactly once and calls `conn.Close()`
-  to wake both pumps. This avoids the classic send-on-closed-channel panic.
+- **No locks needed.** Node runs the hub on a single event-loop thread, so the
+  rooms map has exactly one writer by construction. (The original Go hub bought
+  the same guarantee with a dedicated goroutine plus an `RWMutex`; here it is
+  free — which is why the channel machinery is gone rather than emulated.)
+- **Membership and presence stay in step.** Every mutation goes through
+  `register` / `unregister`, so a `presence_join` or `presence_leave` is never
+  emitted against a stale room.
+- **Slow-client eviction is bounded.** Fan-out sends are non-blocking; a client
+  whose socket backlog passes the 1 MiB watermark is evicted. Eviction recurses
+  through a `presence_leave` broadcast, but it first deletes the client from the
+  room, so recursion depth ≤ room size.
+- **Keepalive is a rolling deadline.** A 54s timer sends a WS ping; a separate
+  60s timer, reset by any inbound frame or pong, terminates a peer that has gone
+  quiet. Browser JS can't send ping frames, so clients send a JSON `ping` that
+  the server answers with `pong` — which also counts as liveness.
 - **Presence is deduplicated by `userId`** — multiple tabs collapse to one
-  viewer, and `presence_join` / `presence_leave` fire only on a user's first
-  and last connection in the room.
+  viewer, and `presence_join` / `presence_leave` fire only on a user's first and
+  last connection in the room.
+- **Clients can't forge identity.** A relayed `typing` frame is re-stamped with
+  the sender's authenticated `userId`, and server-authoritative types
+  (`review_added`, `presence_*`, `ai_review_ready`) are ignored inbound.
 
-The full broadcast path is just three hops: a resolver (or the Gemini
-service) calls `hub.BroadcastToRoom(snippetId, msg)`, which enqueues a frame
-on the broadcast channel. `Run()` picks it up, takes an `RLock` to snapshot
-the room, and pushes the bytes onto each client's send buffer. Each client's
-`writePump` does the actual `conn.WriteMessage`. Reviews appear on every
-viewer's screen as soon as `AddReview` returns.
+The full broadcast path is two hops: a resolver (or the Gemini service) calls
+`hub.broadcastToRoom(snippetId, msg)`, which serializes the envelope once and
+pushes it to every socket in the room. Reviews appear on every viewer's screen
+as soon as `addReview` returns.
 
 ---
 
