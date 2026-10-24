@@ -1,7 +1,3 @@
-node_modules/
-dist/
-*.log
+bin/
+*.test
 .env
-.env.*
-!.env.example
-!.env.prod.example

@@ -8,10 +8,9 @@ export function createUrqlClient(): Client {
 		exchanges: [cacheExchange, fetchExchange],
 		fetchOptions: () => {
 			const token = getStoredToken();
-			return {
-				credentials: 'include',
-				headers: token ? { Authorization: `Bearer ${token}` } : {}
-			};
+			const headers: Record<string, string> = {};
+			if (token) headers['Authorization'] = `Bearer ${token}`;
+			return { credentials: 'include', headers };
 		}
 	});
 }

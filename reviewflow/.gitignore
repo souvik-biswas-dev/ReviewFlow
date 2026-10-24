@@ -1,8 +1,7 @@
 # Build artifacts
 /tmp/
 /bin/
-server/dist/
-server/node_modules/
+server/bin/
 
 # Local environment — never commit secrets
 .env

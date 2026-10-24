@@ -50,6 +50,8 @@ export const GET_SNIPPET = gql`
 			previousVersion
 			createdAt
 			updatedAt
+			aiStatus
+			aiError
 			author {
 				...UserFields
 			}
@@ -105,4 +107,14 @@ export const ADD_REVIEW = gql`
 		}
 	}
 	${REVIEW_FIELDS}
+`;
+
+export const RETRY_AI_REVIEW = gql`
+	mutation RetryAIReview($snippetId: ID!) {
+		retryAIReview(snippetId: $snippetId) {
+			id
+			aiStatus
+			aiError
+		}
+	}
 `;

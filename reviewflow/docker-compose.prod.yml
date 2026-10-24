@@ -6,7 +6,7 @@
 #
 # Three services:
 #   - mongo    : persistent database, auth enabled, no exposed port.
-#   - backend  : compiled Node server, no exposed port (Caddy reaches it
+#   - backend  : compiled Go server (distroless), no exposed port (Caddy reaches it
 #                internally on the compose network).
 #   - caddy    : SPA host + reverse proxy + automatic HTTPS via Let's Encrypt.
 #

@@ -1,4 +1,4 @@
-// Domain types mirroring the Go backend's GraphQL schema + WebSocket envelope.
+// Domain types mirroring the Go backend's GraphQL schema (internal/graph/schema.graphqls) + WebSocket envelope.
 
 export interface User {
 	id: string;
@@ -40,7 +40,12 @@ export interface Snippet {
 	aiReview: AIReview | null;
 	createdAt: string;
 	updatedAt: string;
+	/** disabled | none | pending | ready | failed */
+	aiStatus: AIStatus;
+	aiError: string | null;
 }
+
+export type AIStatus = 'disabled' | 'none' | 'pending' | 'ready' | 'failed';
 
 /** Row returned by GET /notifications (enriched with the snippet title). */
 export interface NotificationItem {
@@ -76,7 +81,9 @@ export type WsMessageType =
 	| 'presence_join'
 	| 'presence_leave'
 	| 'presence_list'
+	| 'ai_review_pending'
 	| 'ai_review_ready'
+	| 'ai_review_failed'
 	| 'typing'
 	| 'ping'
 	| 'pong';
@@ -102,7 +109,9 @@ export interface WsPayloadMap {
 	presence_join: Presence;
 	presence_leave: Presence;
 	presence_list: Presence[];
+	ai_review_pending: { snippetId: string };
 	ai_review_ready: AIReview;
+	ai_review_failed: { snippetId: string; error: string };
 	typing: { line?: number } | null;
 	ping: null;
 	pong: null;

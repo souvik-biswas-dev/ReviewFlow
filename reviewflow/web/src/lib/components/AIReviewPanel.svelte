@@ -1,15 +1,20 @@
 <script lang="ts">
-	import { Sparkles, Gauge, Lightbulb, Wrench, ShieldAlert, ShieldCheck, ChevronDown } from 'lucide-svelte';
+	import { Sparkles, Gauge, Lightbulb, Wrench, ShieldAlert, ShieldCheck, ChevronDown, AlertTriangle, RotateCw } from 'lucide-svelte';
 	import Badge from './ui/Badge.svelte';
 	import { cn } from '$lib/utils/cn';
-	import type { AIReview } from '$lib/types';
+	import type { AIReview, AIStatus } from '$lib/types';
 
 	interface Props {
 		aiReview: AIReview | null;
-		pending?: boolean;
+		status: AIStatus;
+		error?: string | null;
+		/** Only the snippet's author may (re)run the review. */
+		canRetry?: boolean;
+		retrying?: boolean;
+		onRetry?: () => void;
 	}
 
-	let { aiReview = null, pending = false }: Props = $props();
+	let { aiReview = null, status, error = null, canRetry = false, retrying = false, onRetry }: Props = $props();
 	let showHints = $state(true);
 
 	function scoreColor(s: number): string {
@@ -21,7 +26,7 @@
 </script>
 
 <div class="flex-1 space-y-4 overflow-y-auto pr-1">
-	{#if !aiReview && pending}
+	{#if !aiReview && status === 'pending'}
 		<!-- Analyzing skeleton -->
 		<div class="glass flex items-center gap-3 rounded-xl p-4">
 			<div class="relative">
@@ -29,7 +34,9 @@
 			</div>
 			<div>
 				<p class="text-sm font-medium text-slate-200">Gemini is analyzing…</p>
-				<p class="text-xs text-slate-500">This usually takes a few seconds.</p>
+				<p class="text-xs text-slate-500">
+					Usually a few seconds. If several snippets were posted at once, reviews run one at a time.
+				</p>
 			</div>
 		</div>
 		<div class="space-y-3">
@@ -37,12 +44,33 @@
 			<div class="skeleton h-32"></div>
 			<div class="skeleton h-24"></div>
 		</div>
-	{:else if !aiReview}
-		<!-- No review and not pending -->
+	{:else if !aiReview && status === 'failed'}
+		<div class="glass space-y-3 rounded-xl border border-red-500/30 p-4">
+			<p class="flex items-center gap-2 text-sm font-medium text-red-300">
+				<AlertTriangle class="h-4 w-4 shrink-0" /> The AI review didn't complete
+			</p>
+			<p class="text-sm text-slate-400">{error ?? 'Unknown error.'}</p>
+			{#if canRetry}
+				<button type="button" class="btn-ghost" disabled={retrying} onclick={() => onRetry?.()}>
+					<RotateCw class={cn('h-4 w-4', retrying && 'animate-spin')} /> Retry
+				</button>
+			{/if}
+		</div>
+	{:else if !aiReview && status === 'disabled'}
 		<div class="flex h-full flex-col items-center justify-center gap-2 text-center text-sm text-slate-500">
 			<Sparkles class="h-6 w-6 text-slate-600" />
-			<p class="font-medium text-slate-400">No AI review available</p>
-			<p>It may still be queued, or AI is disabled on the server.</p>
+			<p class="font-medium text-slate-400">AI reviews are switched off</p>
+			<p>The server has no GEMINI_API_KEY. Everything else works.</p>
+		</div>
+	{:else if !aiReview}
+		<div class="flex h-full flex-col items-center justify-center gap-3 text-center text-sm text-slate-500">
+			<Sparkles class="h-6 w-6 text-slate-600" />
+			<p class="font-medium text-slate-400">No AI review yet</p>
+			{#if canRetry}
+				<button type="button" class="btn-ghost" disabled={retrying} onclick={() => onRetry?.()}>
+					<Sparkles class="h-4 w-4" /> Run AI review
+				</button>
+			{/if}
 		</div>
 	{:else}
 		<!-- Score header -->

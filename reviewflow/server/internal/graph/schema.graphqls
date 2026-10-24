@@ -1,0 +1,91 @@
+# ReviewFlow GraphQL schema.
+#
+#   - `ID` values are MongoDB ObjectIDs rendered as hex strings.
+#   - `Time` is an RFC-3339 timestamp.
+#   - Realtime delivery is NOT done through GraphQL subscriptions: every
+#     mutation that changes a review also pushes a typed frame to the snippet's
+#     WebSocket room (see internal/ws), so a browser needs one query + one socket.
+
+scalar Time
+
+type User {
+  id: ID!
+  githubUsername: String!
+  avatarUrl: String!
+  createdAt: Time!
+}
+
+type Snippet {
+  id: ID!
+  title: String!
+  language: String!
+  code: String!
+  "Optional prior code; enables the diff viewer."
+  previousVersion: String
+  author: User!
+  "Human review comments, oldest first (flat; the client nests by parentReviewId)."
+  reviews: [Review!]!
+  "Null until the AI pass has finished successfully."
+  aiReview: AIReview
+  "One of: disabled | none | pending | ready | failed."
+  aiStatus: String!
+  "Why the last AI run failed (only when aiStatus is failed)."
+  aiError: String
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+type Review {
+  id: ID!
+  snippetId: ID!
+  author: User!
+  body: String!
+  "Null = a general comment not anchored to a line."
+  lineNumber: Int
+  "Null for top-level reviews; set on replies (one level deep)."
+  parentReviewId: ID
+  createdAt: Time!
+}
+
+type AIReview {
+  id: ID!
+  snippetId: ID!
+  suggestions: [String!]!
+  complexity: String!
+  refactorHints: [String!]!
+  securityFlags: [String!]!
+  qualityScore: Int!
+  language: String!
+  generatedAt: Time!
+}
+
+input CreateSnippetInput {
+  title: String!
+  language: String!
+  code: String!
+  previousVersion: String
+}
+
+input AddReviewInput {
+  body: String!
+  lineNumber: Int
+  parentReviewId: ID
+}
+
+type Query {
+  "Fetch a single snippet by id."
+  snippet(id: ID!): Snippet
+  "List snippets newest-first, optionally filtered by author and/or language."
+  snippets(authorId: ID, language: String, limit: Int): [Snippet!]!
+  "The currently authenticated user, or null if not logged in."
+  me: User
+}
+
+type Mutation {
+  "Create a snippet and queue its AI review."
+  createSnippet(input: CreateSnippetInput!): Snippet!
+  "Persist a review, push it to everyone viewing the snippet, and notify the snippet's author."
+  addReview(snippetId: ID!, input: AddReviewInput!): Review!
+  "Re-run the AI review (snippet author only). Returns the snippet with its new aiStatus."
+  retryAIReview(snippetId: ID!): Snippet!
+}

@@ -1,14 +1,14 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { getContextClient } from '@urql/svelte';
 	import { ArrowLeft, AlertTriangle, Code as CodeIcon, GitCompareArrows } from 'lucide-svelte';
 	import type { PageData } from './$types';
 
-	import { GET_SNIPPET, ADD_REVIEW } from '$lib/graphql/snippets';
+	import { GET_SNIPPET, ADD_REVIEW, RETRY_AI_REVIEW } from '$lib/graphql/snippets';
 	import { createWsStore } from '$lib/stores/ws';
 	import { languageLabel } from '$lib/codemirror/languages';
 	import { cn } from '$lib/utils/cn';
-	import type { Snippet, Review, AIReview, Presence, WsMessage } from '$lib/types';
+	import type { Snippet, Review, AIReview, AIStatus, Presence, WsMessage } from '$lib/types';
 
 	import CodeEditor from '$lib/components/CodeEditor.svelte';
 	import DiffView from '$lib/components/DiffView.svelte';
@@ -32,8 +32,10 @@
 
 	let reviews = $state<Review[]>([]);
 	let aiReview = $state<AIReview | null>(null);
-	let aiPending = $state(false);
-	let aiPendingTimer: ReturnType<typeof setTimeout> | null = null;
+	let aiStatus = $state<AIStatus>('none');
+	let aiError = $state<string | null>(null);
+	let retrying = $state(false);
+	const isAuthor = $derived(snippet?.author.id === data.user.id);
 
 	let viewers = $state<Presence[]>([]);
 	let typingNames = $state<string[]>([]);
@@ -67,18 +69,38 @@
 			snippet = s;
 			reviews = s.reviews ?? [];
 			aiReview = s.aiReview;
-			aiPending = !s.aiReview;
-			// If the AI review hasn't arrived yet, give it 60 s before
-			// switching to the "not available" state — prevents an infinite
-			// skeleton when the backend AI job failed silently.
-			if (aiPending) {
-				if (aiPendingTimer) clearTimeout(aiPendingTimer);
-				aiPendingTimer = setTimeout(() => {
-					if (aiPending) aiPending = false;
-				}, 60_000);
-			}
+			aiStatus = s.aiStatus;
+			aiError = s.aiError;
 		}
 		loading = false;
+	}
+
+	/**
+	 * Re-reads reviews and AI state without touching the page chrome. Runs each
+	 * time the socket (re)opens: anything broadcast while we were offline, or in
+	 * the gap between the first query and the socket connecting, is recovered here.
+	 */
+	async function resync(): Promise<void> {
+		const res = await client.query(GET_SNIPPET, { id: data.id }, { requestPolicy: 'network-only' }).toPromise();
+		const s = res.data?.snippet as Snippet | undefined;
+		if (!s) return;
+		for (const r of s.reviews ?? []) upsertReview(r);
+		aiReview = s.aiReview;
+		aiStatus = s.aiStatus;
+		aiError = s.aiError;
+	}
+
+	async function retryAI(): Promise<void> {
+		retrying = true;
+		const res = await client.mutation(RETRY_AI_REVIEW, { snippetId: data.id }).toPromise();
+		retrying = false;
+		if (res.error) {
+			aiStatus = 'failed';
+			aiError = res.error.graphQLErrors[0]?.message ?? res.error.message;
+			return;
+		}
+		aiStatus = 'pending';
+		aiError = null;
 	}
 
 	function upsertReview(r: Review): void {
@@ -135,6 +157,15 @@
 		activeTab = 'reviews';
 	}
 
+	// Resync every time the socket opens (first connect and each reconnect).
+	$effect(() => {
+		if ($wsStatus === 'open') {
+			untrack(() => {
+				if (snippet) void resync();
+			});
+		}
+	});
+
 	// --- lifecycle ---
 	onMount(() => {
 		void loadSnippet();
@@ -147,18 +178,25 @@
 			}),
 			ws.on('presence_leave', (p) => (viewers = viewers.filter((v) => v.userId !== p.userId))),
 			ws.on('review_added', (r) => upsertReview(r)),
-			ws.on('ai_review_ready', (r) => {
-				if (aiPendingTimer) { clearTimeout(aiPendingTimer); aiPendingTimer = null; }
-				aiReview = r;
-				aiPending = false;
+			ws.on('ai_review_pending', () => {
+				aiStatus = 'pending';
+				aiError = null;
 			}),
-			ws.on('typing', (_, msg) => handleTyping(msg))
+			ws.on('ai_review_ready', (r) => {
+				aiReview = r;
+				aiStatus = 'ready';
+				aiError = null;
+			}),
+			ws.on('ai_review_failed', (f) => {
+				aiStatus = 'failed';
+				aiError = f.error;
+			}),
+						ws.on('typing', (_, msg) => handleTyping(msg))
 		];
 
 		return () => {
 			offs.forEach((off) => off());
 			ws.disconnect();
-			if (aiPendingTimer) clearTimeout(aiPendingTimer);
 			for (const t of typingTimers.values()) clearTimeout(t);
 		};
 	});
@@ -310,7 +348,14 @@
 						/>
 					</div>
 				{:else}
-					<AIReviewPanel {aiReview} pending={aiPending} />
+					<AIReviewPanel
+						{aiReview}
+						status={aiStatus}
+						error={aiError}
+						canRetry={isAuthor}
+						{retrying}
+						onRetry={retryAI}
+					/>
 				{/if}
 			</section>
 		</div>

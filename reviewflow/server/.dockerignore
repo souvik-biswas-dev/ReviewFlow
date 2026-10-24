@@ -1,9 +1,3 @@
-# Everything the image doesn't need. node_modules is rebuilt inside the image
-# so a host build (possibly a different libc/arch) never leaks in.
-node_modules
-dist
-test
 .env
-.env.*
-*.log
-.git
+*.test
+bin/

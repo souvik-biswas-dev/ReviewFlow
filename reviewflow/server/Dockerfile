@@ -1,43 +1,22 @@
 # syntax=docker/dockerfile:1.7
 #
-# Production image for the ReviewFlow Node backend.
-#   Stage 1 (builder) : install everything, compile TypeScript to dist/.
-#   Stage 2 (deps)    : install production dependencies only.
-#   Stage 3 (runtime) : copy dist/ + prod node_modules, run as a non-root user.
+# Production image for the ReviewFlow Go backend.
+#   Stage 1: compile a static binary.
+#   Stage 2: distroless, non-root, nothing but the binary.
 
-# --- builder ---------------------------------------------------------------
-FROM node:24-alpine AS builder
+FROM golang:1.23-alpine AS build
 WORKDIR /src
+ENV CGO_ENABLED=0 GOFLAGS=-mod=mod
 
-# Cache the dependency install in its own layer so app changes don't bust it.
-COPY package.json package-lock.json ./
-RUN npm ci
+# Dependencies first so source edits don't bust the download layer.
+COPY go.mod go.sum* ./
+RUN go mod download
 
-COPY tsconfig.json ./
-COPY scripts ./scripts
-COPY src ./src
-RUN npm run build
+COPY . .
+RUN go build -trimpath -ldflags="-s -w" -o /out/server ./cmd/server
 
-# --- production dependencies ----------------------------------------------
-FROM node:24-alpine AS deps
-WORKDIR /src
-
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
-
-# --- runtime --------------------------------------------------------------
-FROM node:24-alpine AS runtime
-ENV NODE_ENV=production
-WORKDIR /app
-
-COPY --from=deps  /src/node_modules ./node_modules
-COPY --from=builder /src/dist ./dist
-COPY package.json ./
-
-# `node` (uid 1000) ships with the base image; never run the server as root.
-USER node
+FROM gcr.io/distroless/static-debian12:nonroot
+COPY --from=build /out/server /server
 EXPOSE 8080
-
-# Exec form, so node is PID 1 and receives SIGTERM directly — that's what the
-# graceful shutdown handler in src/index.ts hangs off.
-CMD ["node", "dist/index.js"]
+# Exec form: the server is PID 1 and receives SIGTERM for graceful shutdown.
+ENTRYPOINT ["/server"]

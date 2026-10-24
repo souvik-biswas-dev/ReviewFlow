@@ -1,0 +1,33 @@
+# gqlgen configuration. Regenerate with:  make generate
+schema:
+  - internal/graph/schema.graphqls
+
+exec:
+  filename: internal/graph/generated.go
+  package: graph
+
+model:
+  filename: internal/graph/model/models_gen.go
+  package: model
+
+resolver:
+  layout: follow-schema
+  dir: internal/graph
+  package: graph
+  filename_template: "{name}.resolvers.go"
+
+# Bind GraphQL types to the structs in internal/domain by name, so resolvers
+# return plain domain values and gqlgen reads their fields directly.
+autobind:
+  - reviewflow/internal/domain
+
+models:
+  ID:
+    model:
+      - github.com/99designs/gqlgen/graphql.ID
+  Time:
+    model:
+      - github.com/99designs/gqlgen/graphql.Time
+  Int:
+    model:
+      - github.com/99designs/gqlgen/graphql.Int

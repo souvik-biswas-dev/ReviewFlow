@@ -2,7 +2,33 @@
 	import { Github, Radio, Sparkles, ShieldCheck, ArrowRight, ExternalLink } from 'lucide-svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
-	import { loginWithGitHub } from '$lib/stores/auth';
+	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { loginWithGitHub, loginAsGuest, fetchAuthConfig, takeNext, type AuthConfig } from '$lib/stores/auth';
+
+	let config = $state<AuthConfig | null>(null);
+	let guestName = $state('');
+	let signingIn = $state(false);
+	let signInError = $state<string | null>(null);
+
+	onMount(async () => {
+		config = await fetchAuthConfig();
+	});
+
+	async function guestSignIn(e: Event): Promise<void> {
+		e.preventDefault();
+		if (signingIn) return;
+		signingIn = true;
+		signInError = null;
+		try {
+			await loginAsGuest(guestName.trim());
+			await goto(takeNext());
+		} catch (err) {
+			signInError = err instanceof Error ? err.message : 'Sign-in failed.';
+		} finally {
+			signingIn = false;
+		}
+	}
 
 	const stack = [
 		{ name: 'SvelteKit', slug: 'svelte' },
@@ -26,8 +52,8 @@
 		},
 		{
 			icon: ShieldCheck,
-			title: 'GitHub-native',
-			body: 'Sign in with GitHub, share a link, and review together. No setup, no installs, no friction.'
+			title: 'Share a link, review together',
+			body: 'Sign in, send the snippet link to a teammate, and review side by side. Notifications tell authors the moment someone weighs in.'
 		}
 	];
 </script>
@@ -38,9 +64,7 @@
 		<div class="flex items-center gap-2 font-display text-lg font-bold">
 			<span class="text-aurora">✦</span> ReviewFlow
 		</div>
-		<Button variant="ghost" onclick={loginWithGitHub}>
-			<Github class="h-4 w-4" /> Sign in
-		</Button>
+		<a href="#signin" class="btn-ghost">Sign in</a>
 	</header>
 
 	<!-- Hero -->
@@ -63,11 +87,48 @@
 			snippet, share the link, and watch feedback arrive as it happens.
 		</p>
 
-		<div class="mt-10 flex animate-fade-up items-center gap-3 [animation-delay:180ms]">
-			<Button onclick={loginWithGitHub}>
-				<Github class="h-5 w-5" /> Sign in with GitHub
-				<ArrowRight class="h-4 w-4" />
-			</Button>
+		<div id="signin" class="mt-10 w-full max-w-sm animate-fade-up space-y-3 [animation-delay:180ms]">
+			{#if config === null}
+				<div class="skeleton mx-auto h-12 w-full rounded-xl"></div>
+			{:else}
+				{#if config.github}
+					<Button onclick={loginWithGitHub} class="w-full">
+						<Github class="h-5 w-5" /> Sign in with GitHub
+						<ArrowRight class="h-4 w-4" />
+					</Button>
+				{/if}
+				{#if config.github && config.guest}
+					<p class="text-xs uppercase tracking-wide text-slate-500">or</p>
+				{/if}
+				{#if config.guest}
+					<form onsubmit={guestSignIn} class="glass flex gap-2 rounded-xl p-2">
+						<input
+							bind:value={guestName}
+							placeholder="Pick a display name"
+							maxlength="32"
+							autocomplete="nickname"
+							aria-label="Display name"
+							class="min-w-0 flex-1 rounded-lg bg-transparent px-3 py-2 text-slate-200 placeholder:text-slate-500 focus:outline-none"
+						/>
+						<Button type="submit" disabled={signingIn || guestName.trim().length < 2}>
+							{signingIn ? 'Joining…' : 'Continue as guest'}
+						</Button>
+					</form>
+					<p class="text-xs text-slate-500">
+						No account needed. Open a second browser window with another name to try live
+						reviews.
+					</p>
+				{/if}
+				{#if !config.github && !config.guest}
+					<p class="glass rounded-xl p-4 text-sm text-amber-300">
+						No sign-in method is enabled on this server. Set ALLOW_GUEST_LOGIN=true or configure
+						GitHub OAuth in .env.
+					</p>
+				{/if}
+				{#if signInError}
+					<p class="text-sm text-red-400">{signInError}</p>
+				{/if}
+			{/if}
 		</div>
 	</section>
 
